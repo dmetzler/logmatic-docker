@@ -29,6 +29,7 @@ parser.add_argument("--port", dest='port', type=int, help="Logmatic.io's port (d
 parser.add_argument("--debug", dest="debug", action="store_true", help="Enable debugging")
 parser.add_argument("-i", dest='interval', type=int, help="Seconds between to stats report (default 30)")
 parser.add_argument("-a", "--attr", action='append')
+parser.add_argument("--docker-version", dest='docker_version', help="Force the version to use for Docker")
 
 # Default values
 parser.set_defaults(logs=True)
@@ -41,6 +42,7 @@ parser.set_defaults(port=10514)
 parser.set_defaults(interval=30)
 parser.set_defaults(attr=[])
 parser.set_defaults(debug=False)
+parser.set_defaults(docker_version=None)
 
 args = parser.parse_args()
 internal_logger.debug(args)
@@ -57,7 +59,7 @@ if args.debug is True:
 
 # Initialise the connection to the local daemon
 base_url = 'unix://var/run/docker.sock'
-client = docker.DockerClient(base_url=base_url, timeout=None)
+client = docker.DockerClient(base_url=base_url, timeout=None, version=args.docker_version)
 
 # Main logic starts here
 agent = AgentReporter(client=client, logger=logmatic_logger, namespace=args.ns, attrs=args.attr)
@@ -94,9 +96,9 @@ while 1:
                 if args.stats is True:
                     agent.export_stats(container)
 
-            # Export info to Logmatic.io
-            if args.daemon_info is True:
-                agent.export_daemon_info()
+        # Export info to Logmatic.io
+        if args.daemon_info is True:
+            agent.export_daemon_info()
 
         sleep(args.interval)
         internal_logger.debug("Next tick in {}s".format(args.interval))
