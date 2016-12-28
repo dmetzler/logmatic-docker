@@ -42,7 +42,7 @@ parser.set_defaults(port=10514)
 parser.set_defaults(interval=30)
 parser.set_defaults(attr=[])
 parser.set_defaults(debug=False)
-parser.set_defaults(docker_version=None)
+parser.set_defaults(docker_version="auto")
 
 args = parser.parse_args()
 internal_logger.debug(args)
