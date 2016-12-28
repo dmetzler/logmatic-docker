@@ -11,7 +11,6 @@ import logmatic
 from agent.AgentReporter import AgentReporter
 
 internal_logger = logging.getLogger()
-internal_logger.addHandler(logging.NullHandler())
 
 # Args parser settings
 parser = argparse.ArgumentParser(description='Send logs, events and stats to Logmatic.io')
@@ -27,6 +26,7 @@ parser.add_argument('--no-events', dest='events', action="store_false", help="Di
 parser.add_argument("--namespace", dest='ns', help="Default namespace")
 parser.add_argument("--hostname", dest='hostname', help="Logmatic.io's hostname (default api.logmatic.io)")
 parser.add_argument("--port", dest='port', type=int, help="Logmatic.io's port (default 10514)")
+parser.add_argument("--debug", dest="debug", action="store_true", help="Enable debugging")
 parser.add_argument("-i", dest='interval', type=int, help="Seconds between to stats report (default 30)")
 parser.add_argument("-a", "--attr", action='append')
 
@@ -40,6 +40,7 @@ parser.set_defaults(hostname="api.logmatic.io")
 parser.set_defaults(port=10514)
 parser.set_defaults(interval=30)
 parser.set_defaults(attr=[])
+parser.set_defaults(debug=False)
 
 args = parser.parse_args()
 internal_logger.debug(args)
@@ -50,6 +51,9 @@ handler = logmatic.LogmaticHandler(args.token, host=args.hostname, port=args.por
 handler.setFormatter(logmatic.JsonFormatter(fmt="%(message)"))
 logmatic_logger.addHandler(handler)
 logmatic_logger.setLevel(logging.DEBUG)
+
+if args.debug is True:
+    internal_logger.addHandler(logging.StreamHandler(sys.stderr))
 
 # Initialise the connection to the local daemon
 base_url = 'unix://var/run/docker.sock'
@@ -65,7 +69,6 @@ logs = False
 
 # Main loop
 while 1:
-
 
     try:
         containers = None

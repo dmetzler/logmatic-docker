@@ -1,4 +1,5 @@
 import logging
+
 import requests
 from docker.errors import DockerException
 
@@ -8,7 +9,6 @@ internal_logger = logging.getLogger()
 
 
 class AgentReporter:
-
     def __init__(self, client, logger, namespace, attrs):
         self.client = client
         self.logger = logger
@@ -114,14 +114,15 @@ class AgentReporter:
             internal_logger.error("Unexpected error, current thread ended.")
         return
 
-
     def export_logs(self, container):
         """Send all logs to Logmatic.io"""
+        if container.attrs["Config"]["Image"].startswith("logmatic/logmatic-docker"):
+            return
         try:
             line = ""
             meta = self._build_context(container)
             meta["@marker"].append("docker-logs")
-            logs = container.logs(stream=True, follow=True, stdout=True, stderr=True, tail=0)
+            logs = container.logs(stream=True, follow=True, stdout=True, stderr=False, tail=0)
             for chunk in logs:
                 # Append all char into a string until a \n
                 if chunk is not '\n':
