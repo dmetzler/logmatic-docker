@@ -19,8 +19,7 @@ parser.add_argument("--logs", dest='logs', action="store_true", help="Enable the
 parser.add_argument('--no-logs', dest='logs', action="store_false", help="Disable the logs streams")
 parser.add_argument("--stats", dest='stats', action="store_true", help="Enable the stats streams")
 parser.add_argument('--no-stats', dest='stats', action="store_false", help="Disable the stats streams")
-parser.add_argument("--daemon-info", dest='daemon_info', action="store_true", help="Enable the info streams")
-parser.add_argument('--no-daemon-info', dest='daemon_info', action="store_false", help="Disable the info streams")
+parser.add_argument('--no-detailed-stats', dest='detailed_stats', action="store_false", help="Disable the stats streams")
 parser.add_argument("--events", dest='events', action="store_true", help="Enable the event stream")
 parser.add_argument('--no-events', dest='events', action="store_false", help="Disable the event stream")
 parser.add_argument("--namespace", dest='ns', help="Default namespace")
@@ -34,8 +33,8 @@ parser.add_argument("--docker-version", dest='docker_version', help="Force the v
 # Default values
 parser.set_defaults(logs=True)
 parser.set_defaults(stats=True)
+parser.set_defaults(detailed_stats=True)
 parser.set_defaults(events=True)
-parser.set_defaults(daemon_info=True)
 parser.set_defaults(ns="docker")
 parser.set_defaults(hostname="api.logmatic.io")
 parser.set_defaults(port=10514)
@@ -94,11 +93,8 @@ while 1:
 
                 # Export stats to Logmatic.io
                 if args.stats is True:
-                    agent.export_stats(container)
+                    agent.export_stats(container, detailed=args.detailed_stats)
 
-        # Export info to Logmatic.io
-        if args.daemon_info is True:
-            agent.export_daemon_info()
 
         sleep(args.interval)
         internal_logger.debug("Next tick in {}s".format(args.interval))

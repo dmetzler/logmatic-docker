@@ -56,63 +56,41 @@ class AgentReporter:
 
                     # send it to Logmatic.io
                     self.logger.info("[Docker event] name:{} >> event:{} (image={})"
-                                     .format(container_meta[self.ns]["name"],
-                                             container_meta[self.ns]["event"]["action"],
-                                             container_meta[self.ns]["image"]),
+                                     .format(event["Actor"]["Attributes"]["name"],
+                                             event["Action"],
+                                             event["Actor"]["Attributes"]["image"]),
                                      extra=container_meta)
 
         except (requests.exceptions.ConnectionError, DockerException) as error:
             internal_logger.error("Unexpected end of event stream): {}".format(error))
-        except:
-            internal_logger.error("Unexpected error, current thread ended.")
-        return
+        except Exception as e:
+            internal_logger.error("Unexpected error: {}".format(e))
 
-    def export_daemon_info(self):
-        try:
-            info = self.client.info()
-            meta = {
-                "@marker": ["docker", "docker-info"],
-                self.ns: {
-                    "info": info,
-                    "daemon_name": self.daemon_name
-                }
-            }
-            self.logger.info(
-                "[Docker daemon] Daemon: '{}' >> Containers: {}/{}/{} (run/stop/total), Cores: {}; Mem: {:.2f} GB"
-                    .format(info["Name"],
-                            info["ContainersRunning"],
-                            info["ContainersStopped"],
-                            info["Containers"],
-                            info["NCPU"],
-                            info["MemTotal"] / 1000000000.0),
-                extra=meta)
-        except (requests.exceptions.ConnectionError, DockerException) as error:
-            internal_logger.error("Unexpected end of info stream): {}".format(error))
-        except:
-            internal_logger.error("Unexpected error, current thread ended.")
-        return
-
-    def export_stats(self, container):
+    def export_stats(self, container, detailed):
         try:
             meta = self._build_context(container)
             meta["@marker"].append("docker-stats")
             stats = container.stats(stream=False, decode=True)
-            meta[self.ns]["stats"] = stats
-            meta[self.ns]["human_stats"] = self.calculator.compute_human_stats(container, stats)
-            self.logger.info("[Docker stats] name:{} >> cpu:{:.2f}% mem:{:.2f}% io:{:.2f}MB/s (host:{} image:{})"
-                             .format(meta[self.ns]["name"],
-                                     meta[self.ns]["human_stats"]["cpu_stats"]["total_usage_%"] * 100.0,
-                                     meta[self.ns]["human_stats"]["memory_stats"]["usage_%"] * 100.0,
-                                     meta[self.ns]["human_stats"]["blkio_stats"]["total_bps"] / 1000000.0,
-                                     meta[self.ns]["hostname"],
-                                     meta[self.ns]["image"]), extra=meta)
+            human_stats = self.calculator.compute_human_stats(container, stats)
+            if detailed is True:
+                meta[self.ns]["stats"] = stats
+            meta[self.ns]["human_stats"] = human_stats
+            self.logger.info(
+                "[Docker stats] name:{} >> cpu:{:.2f}% mem:{:.2f}% io:{:.2f}MB/s net:{:.2f}MB/s (host:{} image:{})"
+                .format(meta[self.ns]["name"],
+                        human_stats["cpu_stats"]["total_usage_%"] * 100.0,
+                        human_stats["memory_stats"]["usage_%"] * 100.0,
+                        human_stats["blkio_stats"]["total_bps"] / 1000000.0,
+                        (human_stats["networks"]["all"]["tx_bytes_ps"] + human_stats["networks"]["all"][
+                            "rx_bytes_ps"]) / 1000000.0,
+                        meta[self.ns]["hostname"],
+                        meta[self.ns]["image"]), extra=meta)
 
         except (requests.exceptions.ConnectionError, DockerException) as error:
             internal_logger.error("Unexpected end of stats stream for container({}): {}"
                                   .format(container.short_id, error))
-        except:
-            internal_logger.error("Unexpected error, current thread ended.")
-        return
+        except Exception as e:
+            internal_logger.error("Unexpected error: {}".format(e))
 
     def export_logs(self, container):
         """Send all logs to Logmatic.io"""
@@ -134,37 +112,46 @@ class AgentReporter:
         except (requests.exceptions.ConnectionError, DockerException) as error:
             internal_logger.error(
                 "Unexpected end of logs stream for container({}): {}".format(container.short_id, error))
-        except:
-            internal_logger.error("Unexpected error, current thread ended.")
-        return
+        except Exception as e:
+            internal_logger.error("Unexpected error: {}".format(e))
 
     def _build_context(self, container):
         """Internal method, to build the container context"""
-        labels = {
-            "all": [],
-            "details": {}
-        }
-        for label in container.attrs["Config"]["Labels"]:
-            labels["all"].append(label)
-            labels["details"][label] = container.attrs["Config"]["Labels"][label]
+        try:
+            labels = {
+                "all": [],
+                "details": {}
+            }
+            for label in container.attrs["Config"]["Labels"]:
+                labels["all"].append(label)
+                labels["details"][label] = container.attrs["Config"]["Labels"][label]
 
-        meta = {
-            self.ns: {
-                "id": container.id,
-                "short_id": container.short_id,
-                "name": container.name,
-                "status": container.status,
-                "daemon_name": self.daemon_name,
-                "labels": labels,
-                "hostname": container.attrs["Config"]["Hostname"],
-                "image": container.attrs["Config"]["Image"],
-                "created": container.attrs["Created"],
-                "pid": container.attrs["State"]["Pid"]
-            },
-            "@marker": ["docker"]
-        }
+            meta = {
+                self.ns: {
+                    "id": container.id,
+                    "short_id": container.short_id,
+                    "name": container.name,
+                    "status": container.status,
+                    "daemon_name": self.daemon_name,
+                    "labels": labels,
+                    "hostname": container.attrs["Config"]["Hostname"],
+                    "image": container.attrs["Config"]["Image"],
+                    "created": container.attrs["Created"],
+                    "pid": container.attrs["State"]["Pid"]
+                },
+                "@marker": ["docker"]
+            }
 
-        if len(self.attrs):
-            meta["attr"] = self.attrs
-        self.local_cache[container.id] = meta.copy()
-        return meta
+            if len(self.attrs):
+                meta["attr"] = self.attrs
+
+            self.local_cache[container.id] = meta.copy()
+            return meta
+
+        except Exception as e:
+            internal_logger.error("Unexpected error: {}".format(e))
+            return {
+                self.ns: {
+                    "error": "Can't build meta and context."
+                }
+            }
