@@ -97,3 +97,5 @@ ENV/
 out
 gen
 
+
+*.pyc
